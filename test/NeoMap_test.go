@@ -135,14 +135,14 @@ func TestFrom3(t *testing.T) {
 }
 
 func TestTo1(t *testing.T) {
-	entity3 := DemoEntity3{
-		Ts:      time.Now(),
-		Name:    "test",
-		Age:     22,
-		Address: "浙江",
-	}
-
-	dataMap := neomap.From(entity3)
-
-	dataMap.
+	//entity3 := DemoEntity3{
+	//	Ts:      time.Now(),
+	//	Name:    "test",
+	//	Age:     22,
+	//	Address: "浙江",
+	//}
+	//
+	//dataMap := neomap.From(entity3)
+	//
+	//dataMap.
 }

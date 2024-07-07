@@ -1,7 +1,6 @@
 package neomap
 
 import (
-	"fmt"
 	cmap "github.com/orcaman/concurrent-map"
 	"github.com/simonalong/gole/logger"
 	"github.com/simonalong/gole/util"
@@ -63,178 +62,178 @@ func From(entity interface{}) *NeoMap {
 	return entityMap
 }
 
-// To 将数据输出到实体中
-func (receiver *NeoMap) To(pEntity interface{}) interface{} {
-	if receiver.IsEmpty() {
-		return nil
-	}
-	targetType := reflect.TypeOf(pEntity)
-	if targetType.Kind() != reflect.Ptr {
-		logger.Warn("接收的实体必须为指针类型")
-		return nil
-	}
-
-	if targetType.Elem().Kind() != reflect.Struct {
-		logger.Warn("接收的实体指针类型必须指向的是实体类型")
-		return nil
-	}
-
-	targetValue := reflect.ValueOf(pEntity)
-	for index, num := 0, targetType.Elem().NumField(); index < num; index++ {
-		field := targetType.Elem().Field(index)
-		fieldValue := targetValue.Elem().Field(index)
-
-		// 私有字段不处理
-		if util.IsPrivate(field.Name) {
-			continue
-		}
-
-		doInvokeValue(receiver, reflect.ValueOf(dataMap), field, fieldValue)
-	}
-}
-
-func doInvokeValue(receiver *NeoMap, fieldMapValue reflect.Value, field reflect.StructField, fieldValue reflect.Value) {
-	if fieldMapValue.Kind() == reflect.Ptr {
-		fieldMapValue = fieldMapValue.Elem()
-	}
-
-	var fValue reflect.Value
-	columnName := getFinalColumnName(field)
-	if v, exist := receiver.Get(columnName); exist {
-		reflect.ValueOf(v)
-	}
-
-	// todo
-	//
-	//if fieldValue.Kind() == reflect.Ptr {
-	//	fValue = fValue.Elem()
-	//}
-	//targetValue := valueToTarget(fValue, field.Type)
-	//if targetValue.IsValid() {
-	//	if fieldValue.Kind() == reflect.Ptr {
-	//		if targetValue.Kind() == reflect.Ptr {
-	//			fieldValue.Elem().FieldByName(field.Name).Set(targetValue.Elem().Convert(field.Type))
-	//		} else {
-	//			fieldValue.Elem().FieldByName(field.Name).Set(targetValue.Convert(field.Type))
-	//		}
-	//	} else {
-	//		if targetValue.Kind() == reflect.Ptr {
-	//			fieldValue.Set(targetValue.Elem().Convert(field.Type))
-	//		} else {
-	//			fieldValue.Set(targetValue.Convert(field.Type))
-	//		}
-	//	}
-	//}
-}
-
-func valueToTarget(srcValue reflect.Value, dstType reflect.Type) reflect.Value {
-	if dstType.Kind() == reflect.Struct {
-		if srcValue.Kind() == reflect.Ptr {
-			srcValue = srcValue.Elem()
-		}
-		sourceValue := reflect.ValueOf(srcValue.Interface())
-		if sourceValue.Kind() == reflect.Map || sourceValue.Kind() == reflect.Struct {
-			mapFieldValue := reflect.New(dstType)
-			for index, num := 0, mapFieldValue.Type().Elem().NumField(); index < num; index++ {
-				field := mapFieldValue.Type().Elem().Field(index)
-				fieldValue := mapFieldValue.Elem().Field(index)
-
-				doInvokeValue(sourceValue, field, fieldValue)
-			}
-			return mapFieldValue
-		}
-	} else if dstType.Kind() == reflect.Map {
-		if srcValue.Kind() == reflect.Ptr {
-			srcValue = srcValue.Elem()
-		}
-		sourceValue := reflect.ValueOf(srcValue.Interface())
-		if sourceValue.Kind() == reflect.Map {
-			mapFieldValue := reflect.MakeMap(dstType)
-			for mapR := sourceValue.MapRange(); mapR.Next(); {
-				mapKey := mapR.Key()
-				mapValue := mapR.Value()
-
-				mapKeyRealValue, err := Cast(mapFieldValue.Type().Key().Kind(), fmt.Sprintf("%v", mapKey.Interface()))
-				mapValueRealValue := valueToTarget(mapValue, mapFieldValue.Type().Elem())
-				if err == nil {
-					if mapValueRealValue.Kind() == reflect.Ptr {
-						mapFieldValue.SetMapIndex(reflect.ValueOf(mapKeyRealValue), mapValueRealValue.Elem())
-					} else {
-						mapFieldValue.SetMapIndex(reflect.ValueOf(mapKeyRealValue), mapValueRealValue)
-					}
-				}
-			}
-			return mapFieldValue
-		} else if sourceValue.Kind() == reflect.Struct {
-			srcType := reflect.TypeOf(sourceValue)
-			srcValue := reflect.ValueOf(sourceValue)
-			mapFieldValue := reflect.MakeMap(dstType)
-
-			for index, num := 0, srcType.NumField(); index < num; index++ {
-				field := srcType.Field(index)
-				fieldValue := srcValue.Field(index)
-
-				mapValueRealValue := ObjectToData(fieldValue.Interface())
-				mapFieldValue.SetMapIndex(reflect.ValueOf(ToLowerFirstPrefix(field.Name)), reflect.ValueOf(mapValueRealValue))
-
-				doInvokeValue(sourceValue, field, fieldValue)
-			}
-			return mapFieldValue
-		}
-	} else if dstType.Kind() == reflect.Slice || dstType.Kind() == reflect.Array {
-		if srcValue.Kind() == reflect.Ptr {
-			srcValue = srcValue.Elem()
-		}
-		sourceValue := reflect.ValueOf(srcValue.Interface())
-		if sourceValue.Kind() == reflect.Slice || sourceValue.Kind() == reflect.Array {
-			arrayFieldValue := reflect.MakeSlice(dstType, 0, 0)
-			for arrayIndex := 0; arrayIndex < sourceValue.Len(); arrayIndex++ {
-				dataV := valueToTarget(sourceValue.Index(arrayIndex), dstType.Elem())
-				if dataV.IsValid() {
-					if dataV.Kind() == reflect.Ptr {
-						arrayFieldValue = reflect.Append(arrayFieldValue, dataV.Elem())
-					} else {
-						arrayFieldValue = reflect.Append(arrayFieldValue, dataV)
-					}
-				}
-			}
-			return arrayFieldValue
-		}
-	} else if IsBaseType(dstType) {
-		sourceValue := reflect.ValueOf(srcValue.Interface())
-		if sourceValue.IsValid() && IsBaseType(sourceValue.Type()) {
-			v, err := Cast(dstType.Kind(), fmt.Sprintf("%v", srcValue.Interface()))
-			if err == nil {
-				return reflect.ValueOf(v)
-			}
-		}
-	} else if dstType.Kind() == reflect.Interface {
-		return reflect.ValueOf(ObjectToData(srcValue.Interface()))
-	} else if dstType.Kind() == reflect.Ptr {
-		return srcValue
-	} else {
-		v, err := Cast(dstType.Kind(), fmt.Sprintf("%v", srcValue.Interface()))
-		if err == nil {
-			return reflect.ValueOf(v)
-		}
-	}
-	return reflect.ValueOf(nil)
-}
-
-func getValueFromMapValue(keyValues reflect.Value, key string) (reflect.Value, bool) {
-	if key == "" {
-		return reflect.ValueOf(nil), false
-	}
-	if keyValues.Kind() == reflect.Map {
-		if v1 := keyValues.MapIndex(reflect.ValueOf(key)); v1.IsValid() {
-			return v1, true
-		} else if v2 := keyValues.MapIndex(reflect.ValueOf(ToLowerFirstPrefix(key))); v2.IsValid() {
-			return v2, true
-		}
-	}
-
-	return reflect.ValueOf(nil), false
-}
+//// To 将数据输出到实体中
+//func (receiver *NeoMap) To(pEntity interface{}) interface{} {
+//	if receiver.IsEmpty() {
+//		return nil
+//	}
+//	targetType := reflect.TypeOf(pEntity)
+//	if targetType.Kind() != reflect.Ptr {
+//		logger.Warn("接收的实体必须为指针类型")
+//		return nil
+//	}
+//
+//	if targetType.Elem().Kind() != reflect.Struct {
+//		logger.Warn("接收的实体指针类型必须指向的是实体类型")
+//		return nil
+//	}
+//
+//	targetValue := reflect.ValueOf(pEntity)
+//	for index, num := 0, targetType.Elem().NumField(); index < num; index++ {
+//		field := targetType.Elem().Field(index)
+//		fieldValue := targetValue.Elem().Field(index)
+//
+//		// 私有字段不处理
+//		if util.IsPrivate(field.Name) {
+//			continue
+//		}
+//
+//		doInvokeValue(receiver, reflect.ValueOf(dataMap), field, fieldValue)
+//	}
+//}
+//
+//func doInvokeValue(receiver *NeoMap, fieldMapValue reflect.Value, field reflect.StructField, fieldValue reflect.Value) {
+//	if fieldMapValue.Kind() == reflect.Ptr {
+//		fieldMapValue = fieldMapValue.Elem()
+//	}
+//
+//	var fValue reflect.Value
+//	columnName := getFinalColumnName(field)
+//	if v, exist := receiver.Get(columnName); exist {
+//		reflect.ValueOf(v)
+//	}
+//
+//	// todo
+//	//
+//	//if fieldValue.Kind() == reflect.Ptr {
+//	//	fValue = fValue.Elem()
+//	//}
+//	//targetValue := valueToTarget(fValue, field.Type)
+//	//if targetValue.IsValid() {
+//	//	if fieldValue.Kind() == reflect.Ptr {
+//	//		if targetValue.Kind() == reflect.Ptr {
+//	//			fieldValue.Elem().FieldByName(field.Name).Set(targetValue.Elem().Convert(field.Type))
+//	//		} else {
+//	//			fieldValue.Elem().FieldByName(field.Name).Set(targetValue.Convert(field.Type))
+//	//		}
+//	//	} else {
+//	//		if targetValue.Kind() == reflect.Ptr {
+//	//			fieldValue.Set(targetValue.Elem().Convert(field.Type))
+//	//		} else {
+//	//			fieldValue.Set(targetValue.Convert(field.Type))
+//	//		}
+//	//	}
+//	//}
+//}
+//
+//func valueToTarget(srcValue reflect.Value, dstType reflect.Type) reflect.Value {
+//	if dstType.Kind() == reflect.Struct {
+//		if srcValue.Kind() == reflect.Ptr {
+//			srcValue = srcValue.Elem()
+//		}
+//		sourceValue := reflect.ValueOf(srcValue.Interface())
+//		if sourceValue.Kind() == reflect.Map || sourceValue.Kind() == reflect.Struct {
+//			mapFieldValue := reflect.New(dstType)
+//			for index, num := 0, mapFieldValue.Type().Elem().NumField(); index < num; index++ {
+//				field := mapFieldValue.Type().Elem().Field(index)
+//				fieldValue := mapFieldValue.Elem().Field(index)
+//
+//				doInvokeValue(sourceValue, field, fieldValue)
+//			}
+//			return mapFieldValue
+//		}
+//	} else if dstType.Kind() == reflect.Map {
+//		if srcValue.Kind() == reflect.Ptr {
+//			srcValue = srcValue.Elem()
+//		}
+//		sourceValue := reflect.ValueOf(srcValue.Interface())
+//		if sourceValue.Kind() == reflect.Map {
+//			mapFieldValue := reflect.MakeMap(dstType)
+//			for mapR := sourceValue.MapRange(); mapR.Next(); {
+//				mapKey := mapR.Key()
+//				mapValue := mapR.Value()
+//
+//				mapKeyRealValue, err := Cast(mapFieldValue.Type().Key().Kind(), fmt.Sprintf("%v", mapKey.Interface()))
+//				mapValueRealValue := valueToTarget(mapValue, mapFieldValue.Type().Elem())
+//				if err == nil {
+//					if mapValueRealValue.Kind() == reflect.Ptr {
+//						mapFieldValue.SetMapIndex(reflect.ValueOf(mapKeyRealValue), mapValueRealValue.Elem())
+//					} else {
+//						mapFieldValue.SetMapIndex(reflect.ValueOf(mapKeyRealValue), mapValueRealValue)
+//					}
+//				}
+//			}
+//			return mapFieldValue
+//		} else if sourceValue.Kind() == reflect.Struct {
+//			srcType := reflect.TypeOf(sourceValue)
+//			srcValue := reflect.ValueOf(sourceValue)
+//			mapFieldValue := reflect.MakeMap(dstType)
+//
+//			for index, num := 0, srcType.NumField(); index < num; index++ {
+//				field := srcType.Field(index)
+//				fieldValue := srcValue.Field(index)
+//
+//				mapValueRealValue := ObjectToData(fieldValue.Interface())
+//				mapFieldValue.SetMapIndex(reflect.ValueOf(ToLowerFirstPrefix(field.Name)), reflect.ValueOf(mapValueRealValue))
+//
+//				doInvokeValue(sourceValue, field, fieldValue)
+//			}
+//			return mapFieldValue
+//		}
+//	} else if dstType.Kind() == reflect.Slice || dstType.Kind() == reflect.Array {
+//		if srcValue.Kind() == reflect.Ptr {
+//			srcValue = srcValue.Elem()
+//		}
+//		sourceValue := reflect.ValueOf(srcValue.Interface())
+//		if sourceValue.Kind() == reflect.Slice || sourceValue.Kind() == reflect.Array {
+//			arrayFieldValue := reflect.MakeSlice(dstType, 0, 0)
+//			for arrayIndex := 0; arrayIndex < sourceValue.Len(); arrayIndex++ {
+//				dataV := valueToTarget(sourceValue.Index(arrayIndex), dstType.Elem())
+//				if dataV.IsValid() {
+//					if dataV.Kind() == reflect.Ptr {
+//						arrayFieldValue = reflect.Append(arrayFieldValue, dataV.Elem())
+//					} else {
+//						arrayFieldValue = reflect.Append(arrayFieldValue, dataV)
+//					}
+//				}
+//			}
+//			return arrayFieldValue
+//		}
+//	} else if IsBaseType(dstType) {
+//		sourceValue := reflect.ValueOf(srcValue.Interface())
+//		if sourceValue.IsValid() && IsBaseType(sourceValue.Type()) {
+//			v, err := Cast(dstType.Kind(), fmt.Sprintf("%v", srcValue.Interface()))
+//			if err == nil {
+//				return reflect.ValueOf(v)
+//			}
+//		}
+//	} else if dstType.Kind() == reflect.Interface {
+//		return reflect.ValueOf(ObjectToData(srcValue.Interface()))
+//	} else if dstType.Kind() == reflect.Ptr {
+//		return srcValue
+//	} else {
+//		v, err := Cast(dstType.Kind(), fmt.Sprintf("%v", srcValue.Interface()))
+//		if err == nil {
+//			return reflect.ValueOf(v)
+//		}
+//	}
+//	return reflect.ValueOf(nil)
+//}
+//
+//func getValueFromMapValue(keyValues reflect.Value, key string) (reflect.Value, bool) {
+//	if key == "" {
+//		return reflect.ValueOf(nil), false
+//	}
+//	if keyValues.Kind() == reflect.Map {
+//		if v1 := keyValues.MapIndex(reflect.ValueOf(key)); v1.IsValid() {
+//			return v1, true
+//		} else if v2 := keyValues.MapIndex(reflect.ValueOf(ToLowerFirstPrefix(key))); v2.IsValid() {
+//			return v2, true
+//		}
+//	}
+//
+//	return reflect.ValueOf(nil), false
+//}
 
 func (receiver *NeoMap) Keys() []string {
 	if receiver.sort {

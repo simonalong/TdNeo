@@ -26,7 +26,6 @@ func TestConnect(t *testing.T) {
 	_, err = tdNeo.Exec("create table if not exists neo_china using neo_demo1(`station`) tags(\"china\")")
 	checkErr(err, "建子表失败")
 
-	//
 	// 新增：使用map
 	insertMap := neomap.New()
 	insertMap.SetSort(true)
@@ -37,7 +36,7 @@ func TestConnect(t *testing.T) {
 	_, err = tdNeo.Insert("neo_china", insertMap)
 	checkErr(err, "插入数据")
 
-	// 新增：使用map
+	// 新增：使用entity
 	neoChinaDomain := NeoChinaDomain{
 		Ts:      time.Now(),
 		Name:    "大牛市2",
