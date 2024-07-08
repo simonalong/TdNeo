@@ -1,4 +1,4 @@
-module tdNeo
+module td-neo
 
 go 1.22.4
 
