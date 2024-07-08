@@ -9,7 +9,7 @@ import (
 	"github.com/taosdata/driver-go/v3/common/param"
 	"github.com/taosdata/driver-go/v3/types"
 	"strings"
-	"tdNeo/neomap"
+	"td-neo/neomap"
 )
 
 type TdNeo struct {

@@ -2,7 +2,7 @@ package test
 
 import (
 	"fmt"
-	"tdNeo/neomap"
+	"td-neo/neomap"
 	"testing"
 	"time"
 )

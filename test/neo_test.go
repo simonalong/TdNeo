@@ -3,8 +3,8 @@ package test
 import (
 	"fmt"
 	"github.com/simonalong/gole/time"
-	"tdNeo"
-	"tdNeo/neomap"
+	"td-neo"
+	"td-neo/neomap"
 	"testing"
 )
 
